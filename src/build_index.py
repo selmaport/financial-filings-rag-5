@@ -1,9 +1,19 @@
-"""Chunk filing narrative sections and build the vector index.
+"""Chunk filing text and build the vector index.
 
-Chunking strategy is a real design decision, not boilerplate. Filings have
-labeled sections (Item 7 MD&A, Item 1A Risk Factors). Splitting on those
-boundaries first, then chunking inside them, keeps retrieved passages
-attributable to a section. Record this choice and your reasoning in the README.
+Design note, worth explaining in an interview.
+
+An earlier version split each filing into labeled sections (Item 7 MD&A,
+Item 1A Risk Factors) and tagged every chunk with its section. That looked
+principled but was fragile: 10-Q and 10-K item numbering differs, and the
+table of contents repeats the labels, so the splitter routinely mislabeled
+MD&A content as risk factors. Retrieval then missed the very passages that
+answered performance questions.
+
+The fix is to stop gating on fragile labels. Index the full filing body and
+let semantic search find the right passage by meaning. A lightweight section
+GUESS is still attached as a hint for display and optional filtering, but it
+never blocks retrieval. This removed the "not in the excerpts" failures on
+margin and driver questions.
 """
 
 import json
@@ -17,15 +27,24 @@ RAW_DIR = Path("data/raw")
 CHROMA_DIR = "data/chroma"
 COLLECTION = "filings"
 
-# Sections worth indexing. Everything else is boilerplate or tables.
-SECTION_PATTERNS = {
-    "mdna": r"item\s*7[.\s]*management.s discussion",
-    "risk_factors": r"item\s*1a[.\s]*risk factors",
-    "business": r"item\s*1[.\s]*business",
-}
+CHUNK_CHARS = 2400      # ~600 tokens, smaller so retrieval is more precise
+CHUNK_OVERLAP = 400
 
-CHUNK_CHARS = 3200      # roughly 800 tokens
-CHUNK_OVERLAP = 400     # carries context across a boundary
+# Boilerplate we skip so the index is not polluted with legal filler.
+SKIP_MARKERS = (
+    "table of contents",
+    "incorporated by reference",
+    "exhibit index",
+)
+
+# Lightweight hint only. Never used to gate retrieval.
+SECTION_HINTS = {
+    "mdna": ("management's discussion", "results of operations",
+             "operating margin", "net revenue", "provision for credit"),
+    "risk_factors": ("risk factors", "could adversely affect",
+                     "we are subject to", "may harm our"),
+    "business": ("our business", "we operate", "products and services"),
+}
 
 
 def html_to_text(path: Path) -> str:
@@ -36,31 +55,24 @@ def html_to_text(path: Path) -> str:
     return re.sub(r"\n{3,}", "\n\n", text)
 
 
-def split_sections(text: str) -> dict[str, str]:
-    """Locate labeled sections. Returns whatever it finds, plus a full fallback."""
-    lowered = text.lower()
-    hits = []
-    for name, pattern in SECTION_PATTERNS.items():
-        match = re.search(pattern, lowered)
-        if match:
-            hits.append((match.start(), name))
-
-    if not hits:
-        return {"full_document": text}
-
-    hits.sort()
-    sections = {}
-    for i, (start, name) in enumerate(hits):
-        end = hits[i + 1][0] if i + 1 < len(hits) else len(text)
-        sections[name] = text[start:end]
-    return sections
+def guess_section(chunk_text: str) -> str:
+    """Best-effort label from content. A hint, not a gate."""
+    lowered = chunk_text.lower()
+    scores = {
+        name: sum(lowered.count(kw) for kw in kws)
+        for name, kws in SECTION_HINTS.items()
+    }
+    best = max(scores, key=scores.get)
+    return best if scores[best] > 0 else "other"
 
 
 def chunk(text: str) -> list[str]:
     chunks, cursor = [], 0
     while cursor < len(text):
         piece = text[cursor:cursor + CHUNK_CHARS].strip()
-        if len(piece) > 200:  # drop fragments too small to be useful
+        low = piece.lower()
+        is_boiler = len(piece) < 300 or any(m in low[:120] for m in SKIP_MARKERS)
+        if not is_boiler:
             chunks.append(piece)
         cursor += CHUNK_CHARS - CHUNK_OVERLAP
     return chunks
@@ -68,6 +80,12 @@ def chunk(text: str) -> list[str]:
 
 def main():
     client = chromadb.PersistentClient(path=CHROMA_DIR)
+
+    # Rebuild clean so old mislabeled chunks do not linger.
+    try:
+        client.delete_collection(COLLECTION)
+    except Exception:
+        pass
     collection = client.get_or_create_collection(COLLECTION)
 
     total = 0
@@ -80,22 +98,30 @@ def main():
                 continue
 
             text = html_to_text(path)
-            for section_name, section_text in split_sections(text).items():
-                for i, piece in enumerate(chunk(section_text)):
-                    doc_id = f"{filing['ticker']}_{filing['filing_date']}_{section_name}_{i}"
-                    collection.upsert(
-                        ids=[doc_id],
-                        documents=[piece],
-                        metadatas=[{
-                            "ticker": filing["ticker"],
-                            "form": filing["form"],
-                            "filing_date": filing["filing_date"],
-                            "section": section_name,
-                            "chunk_index": i,
-                        }],
-                    )
-                    total += 1
-            print(f"indexed {filing['ticker']} {filing['filing_date']} {filing['form']}")
+            pieces = chunk(text)
+
+            ids, docs, metas = [], [], []
+            for i, piece in enumerate(pieces):
+                ids.append(f"{filing['ticker']}_{filing['filing_date']}_{i}")
+                docs.append(piece)
+                metas.append({
+                    "ticker": filing["ticker"],
+                    "form": filing["form"],
+                    "filing_date": filing["filing_date"],
+                    "section": guess_section(piece),
+                    "chunk_index": i,
+                })
+
+            # Upsert in batches to stay well under memory limits on free hosting.
+            for j in range(0, len(ids), 200):
+                collection.upsert(
+                    ids=ids[j:j + 200],
+                    documents=docs[j:j + 200],
+                    metadatas=metas[j:j + 200],
+                )
+            total += len(ids)
+            print(f"indexed {filing['ticker']} {filing['filing_date']} "
+                  f"{filing['form']} ({len(ids)} chunks)")
 
     print(f"\n{total} chunks in collection '{COLLECTION}'")
 

@@ -140,36 +140,41 @@ with tab_ask:
         "sources. The system declines when the filings do not contain the answer."
     )
 
-    col_q, col_f = st.columns([3, 1])
-    with col_q:
-        query = st.text_input(
-            "Your question",
-            placeholder="What drove the change in operating margin?",
-        )
-    with col_f:
-        company_label = st.selectbox(
-            "Company",
-            ["All three"] + list(COMPANIES.values()),
-        )
+    # Sample questions load into the editable box below. Tapping one sets the
+    # box text; the box stays fully editable so users can tweak or replace it.
+    if "question_text" not in st.session_state:
+        st.session_state.question_text = ""
 
-    st.caption("Try one of these:")
+    st.caption("Try one of these, then edit it or write your own:")
     cols = st.columns(2)
     for i, q in enumerate(SAMPLE_QUESTIONS):
-        if cols[i % 2].button(q, key=f"sample_{i}", use_container_width=True):
-            query = q
+        if cols[i % 2].button(q, key=f"sample_{i}", width="stretch"):
+            st.session_state.question_text = q
 
-    k = st.slider("Passages to retrieve", 3, 10, 5)
+    query = st.text_area(
+        "Your question",
+        key="question_text",
+        placeholder="What drove the change in operating margin?",
+        height=80,
+    )
 
-    if st.button("Ask", type="primary") and query:
-        ticker = None
-        for t, name in COMPANIES.items():
-            if name == company_label:
-                ticker = t
+    companies_picked = st.multiselect(
+        "Companies to search (leave empty for all)",
+        list(COMPANIES.values()),
+        default=[],
+        help="Pick any combination. Empty searches all three.",
+    )
+
+    k = st.slider("Passages to retrieve", 3, 12, 8)
+
+    if st.button("Ask", type="primary") and query.strip():
+        tickers = [t for t, name in COMPANIES.items() if name in companies_picked]
+        tickers = tickers or None  # empty means search everything
 
         with st.spinner("Retrieving filings and generating a grounded answer..."):
             try:
                 from src.retrieve import answer
-                result = answer(query, ticker=ticker, k=k)
+                result = answer(query, tickers=tickers, k=k)
             except Exception as e:
                 st.error(f"Index not built yet, or API key missing. ({e})")
                 st.stop()
@@ -191,7 +196,7 @@ with tab_ask:
             }
             for i, p in enumerate(passages, start=1)
         ]
-        st.dataframe(pd.DataFrame(source_rows), hide_index=True, use_container_width=True)
+        st.dataframe(pd.DataFrame(source_rows), hide_index=True, width="stretch")
 
         for i, p in enumerate(passages, start=1):
             m = p["metadata"]
@@ -253,7 +258,7 @@ with tab_variance:
                     })
 
                 st.markdown(f"#### {company}: FY{py} to FY{cy}")
-                st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+                st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
 
                 material = flag_material(variances, threshold_pct=10.0)
                 if material:
@@ -288,4 +293,4 @@ with tab_data:
         view["value ($B)"] = (view["value"] / 1e9).round(2)
         view = view[["company", "metric", "fiscal_year", "value ($B)", "tag_used"]]
         view = view.sort_values(["company", "metric", "fiscal_year"])
-        st.dataframe(view, hide_index=True, use_container_width=True)
+        st.dataframe(view, hide_index=True, width="stretch")
