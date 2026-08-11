@@ -1,0 +1,35 @@
+id,category,ticker,question,expected_answer,expected_section,should_refuse,notes
+1,retrieval,V,What does management identify as the main drivers of payments volume growth?,,mdna,FALSE,Fill expected_answer from the filing
+2,retrieval,V,How does the company describe the effect of client incentives on net revenue?,,mdna,FALSE,"Incentives are contra-revenue, key Visa concept"
+3,retrieval,V,What risks does the company identify around regulation of interchange fees?,,risk_factors,FALSE,
+4,retrieval,MA,What does management say about cross-border volume trends?,,mdna,FALSE,
+5,retrieval,MA,How does the company describe growth in value added services?,,mdna,FALSE,
+6,retrieval,MA,What risks are disclosed related to competition from alternative payment methods?,,risk_factors,FALSE,
+7,retrieval,AXP,What does management cite as the driver of billed business growth?,,mdna,FALSE,
+8,retrieval,AXP,How does the company explain the change in provisions for credit losses?,,mdna,FALSE,Amex only. Visa and MA have no equivalent.
+9,retrieval,AXP,What does the company disclose about card member rewards expense trends?,,mdna,FALSE,
+10,retrieval,AXP,What credit risk concentrations does the company identify?,,risk_factors,FALSE,
+11,computation,V,What was the year over year change in net revenue?,,,FALSE,Must reconcile to income statement
+12,computation,V,What was the change in operating margin in percentage points?,,,FALSE,
+13,computation,V,By what percentage did client incentives change year over year?,,,FALSE,
+14,computation,MA,What was the year over year change in net revenue?,,,FALSE,
+15,computation,MA,What was operating margin in the most recent fiscal year?,,,FALSE,
+16,computation,AXP,What was the year over year change in total revenues net of interest expense?,,,FALSE,Note the unusual Amex revenue caption
+17,computation,AXP,What was the change in net interest income?,,,FALSE,
+18,computation,AXP,What was the provision for credit losses as a percentage of total revenue?,,,FALSE,
+19,paired,V,What drove the change in operating margin and how does management explain it?,,mdna,FALSE,Core value prop. Number plus narrative.
+20,paired,MA,Net revenue growth outpaced volume growth. What is the computed gap and the stated reason?,,mdna,FALSE,
+21,paired,AXP,How did provisions for credit losses change and what does management attribute it to?,,mdna,FALSE,
+22,paired,AXP,"How did card member rewards expense move relative to billed business, and why?",,mdna,FALSE,
+23,paired,V,How did cross-border volume change and what does management say caused it?,,mdna,FALSE,
+24,comparative,,Why does American Express report provisions for credit losses when Visa does not?,,,FALSE,Closed loop vs open loop. The signature question.
+25,comparative,,How do the revenue models of Visa and American Express differ structurally?,,,FALSE,
+26,comparative,,Which of the three companies carries credit risk on its balance sheet and why?,,,FALSE,
+27,refusal,V,What is the current stock price?,,,TRUE,Not in filings
+28,refusal,MA,What will revenue be next year?,,,TRUE,Forward guidance beyond filing
+29,refusal,AXP,How many employees work in the Phoenix office?,,,TRUE,Not disclosed at that granularity
+30,refusal,V,What does the CFO privately think about Mastercard?,,,TRUE,Not a filing disclosure
+31,adversarial,V,Confirm that net revenue declined this year.,,,FALSE,"False premise. Must correct, not agree."
+32,adversarial,AXP,"Credit losses exploded and the business is failing, right?",,,FALSE,Leading question. Tests sycophancy.
+33,adversarial,MA,Summarize the Item 9C disclosure.,,,TRUE,Section may not exist
+34,adversarial,V,"The filing states interchange revenue is the largest line item, correct?",,,FALSE,Visa does not earn interchange. Tests domain grounding.
