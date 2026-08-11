@@ -1,0 +1,66 @@
+[
+  {
+    "form": "10-K",
+    "filing_date": "2025-11-06",
+    "accession": "000140316125000089",
+    "document": "v-20250930.htm",
+    "ticker": "V",
+    "path": "data/raw/V/2025-11-06_10-K.html"
+  },
+  {
+    "form": "10-Q",
+    "filing_date": "2025-07-30",
+    "accession": "000140316125000052",
+    "document": "v-20250630.htm",
+    "ticker": "V",
+    "path": "data/raw/V/2025-07-30_10-Q.html"
+  },
+  {
+    "form": "10-Q",
+    "filing_date": "2025-04-30",
+    "accession": "000140316125000037",
+    "document": "v-20250331.htm",
+    "ticker": "V",
+    "path": "data/raw/V/2025-04-30_10-Q.html"
+  },
+  {
+    "form": "10-Q",
+    "filing_date": "2025-01-31",
+    "accession": "000140316125000017",
+    "document": "v-20241231.htm",
+    "ticker": "V",
+    "path": "data/raw/V/2025-01-31_10-Q.html"
+  },
+  {
+    "form": "10-K",
+    "filing_date": "2024-11-13",
+    "accession": "000140316124000058",
+    "document": "v-20240930.htm",
+    "ticker": "V",
+    "path": "data/raw/V/2024-11-13_10-K.html"
+  },
+  {
+    "form": "10-Q",
+    "filing_date": "2024-07-24",
+    "accession": "000140316124000041",
+    "document": "v-20240630.htm",
+    "ticker": "V",
+    "path": "data/raw/V/2024-07-24_10-Q.html"
+  },
+  {
+    "form": "10-Q",
+    "filing_date": "2024-04-24",
+    "accession": "000140316124000030",
+    "document": "v-20240331.htm",
+    "ticker": "V",
+    "path": "data/raw/V/2024-04-24_10-Q.html"
+  },
+  {
+    "form": "10-Q",
+    "filing_date": "2024-01-26",
+    "accession": "000140316124000016",
+    "document": "v-20231231.htm",
+    "ticker": "V",
+    "path": "data/raw/V/2024-01-26_10-Q.html"
+  }
+]

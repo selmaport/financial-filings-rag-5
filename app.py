@@ -58,6 +58,35 @@ def load_financials() -> pd.DataFrame:
 
 
 @st.cache_resource
+def ensure_index() -> int:
+    """Build the vector index on first launch if it is missing.
+
+    On a fresh deploy the repo ships the filings but not the prebuilt index,
+    so the first run builds it once. Streamlit caches the result, so this
+    happens a single time per app instance, not per visitor.
+    """
+    import chromadb
+
+    client = chromadb.PersistentClient(path="data/chroma")
+    try:
+        existing = client.get_collection("filings").count()
+        if existing > 0:
+            return existing
+    except Exception:
+        pass
+
+    with st.spinner("First launch: building the search index from filings. "
+                    "This takes a minute and only happens once."):
+        from src.build_index import main as build_main
+        build_main()
+
+    try:
+        return client.get_collection("filings").count()
+    except Exception:
+        return 0
+
+
+@st.cache_resource
 def index_size() -> int:
     """Chunk count in the vector store, shown as a scale signal."""
     try:
@@ -70,6 +99,7 @@ def index_size() -> int:
 
 stats = load_corpus_stats()
 fin = load_financials()
+chunk_count = ensure_index()
 
 
 # ---------------------------------------------------------------------- header
@@ -83,7 +113,7 @@ st.markdown(
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Companies", len(COMPANIES))
 c2.metric("Filings indexed", stats["filings"])
-c3.metric("Searchable passages", f"{index_size():,}")
+c3.metric("Searchable passages", f"{chunk_count:,}")
 c4.metric("Fiscal years", "2024 to 2025")
 
 st.caption(
