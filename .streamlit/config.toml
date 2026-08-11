@@ -1,0 +1,35 @@
+# Blackstone-inspired Streamlit Theme
+# Work Sans for body, Playfair Display for headings
+# Sophisticated, institutional, classic with sharp contrasts
+
+[theme]
+primaryColor = "#000000"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f4f5f7"
+codeBackgroundColor = "#f4f5f7"
+textColor = "#000000"
+linkColor = "#000000"
+borderColor = "#cbced7"
+showWidgetBorder = true
+showSidebarBorder = true
+baseRadius = "none"
+buttonRadius = "none"
+font = "'Work Sans':https://fonts.googleapis.com/css2?family=Work+Sans:wght@300;400;500;600;700&display=swap"
+headingFont = "'Playfair Display':https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&display=swap"
+codeFont = "'IBM Plex Mono':https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap"
+codeFontSize = "0.875rem"
+baseFontSize = 16
+baseFontWeight = 300
+headingFontSizes = ["44px", "32px", "24px", "18px", "16px", "14px"]
+headingFontWeights = [400, 400, 400, 400, 500, 500]
+linkUnderline = false
+chartCategoricalColors = ["#000000", "#555555", "#888888", "#aaaaaa", "#cccccc", "#333333", "#666666"]
+
+[theme.sidebar]
+primaryColor = "#aaaaaa"
+backgroundColor = "#000000"
+secondaryBackgroundColor = "#1a1a1a"
+codeBackgroundColor = "#1a1a1a"
+textColor = "#ffffff"
+borderColor = "#333333"
+linkColor = "#ffffff"

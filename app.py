@@ -4,80 +4,258 @@ Run locally:  streamlit run app.py
 Deploy:       push to GitHub, then connect the repo at share.streamlit.io
 """
 
+import json
+from pathlib import Path
+
+import pandas as pd
 import streamlit as st
 
-from src.variance import decompose_gross_margin
+from src.variance import Variance, build_variance_table, flag_material
 
-st.set_page_config(page_title="Filing Analysis", layout="wide")
+st.set_page_config(
+    page_title="Payments Filings Analysis",
+    page_icon="§",
+    layout="wide",
+)
 
-st.title("Financial Filings RAG + Variance Analysis")
-st.caption("Computed variances paired with cited management commentary from SEC filings.")
+COMPANIES = {
+    "V": "Visa",
+    "MA": "Mastercard",
+    "AXP": "American Express",
+}
 
-tab_ask, tab_variance = st.tabs(["Ask the filings", "Variance calculator"])
+RAW_DIR = Path("data/raw")
+FIN_PATH = Path("data/financials/financials.csv")
 
+SAMPLE_QUESTIONS = [
+    "What drove the change in operating margin?",
+    "How did provisions for credit losses change and why?",
+    "What does management say about cross-border volume trends?",
+    "Why does American Express report credit losses when Visa does not?",
+]
+
+
+# ---------------------------------------------------------------- data loading
+
+@st.cache_data
+def load_corpus_stats() -> dict:
+    """Count indexed filings per company from the manifests on disk."""
+    stats = {"filings": 0, "per_company": {}}
+    for ticker in COMPANIES:
+        manifest = RAW_DIR / ticker / "manifest.json"
+        if manifest.exists():
+            n = len(json.loads(manifest.read_text()))
+            stats["per_company"][ticker] = n
+            stats["filings"] += n
+    return stats
+
+
+@st.cache_data
+def load_financials() -> pd.DataFrame:
+    if FIN_PATH.exists():
+        return pd.read_csv(FIN_PATH)
+    return pd.DataFrame()
+
+
+@st.cache_resource
+def index_size() -> int:
+    """Chunk count in the vector store, shown as a scale signal."""
+    try:
+        import chromadb
+        client = chromadb.PersistentClient(path="data/chroma")
+        return client.get_collection("filings").count()
+    except Exception:
+        return 0
+
+
+stats = load_corpus_stats()
+fin = load_financials()
+
+
+# ---------------------------------------------------------------------- header
+
+st.title("Payments Sector Filings Analysis")
+st.markdown(
+    "Retrieval and variance analysis over SEC filings for the three major "
+    "card networks. Computed figures paired with cited management commentary."
+)
+
+c1, c2, c3, c4 = st.columns(4)
+c1.metric("Companies", len(COMPANIES))
+c2.metric("Filings indexed", stats["filings"])
+c3.metric("Searchable passages", f"{index_size():,}")
+c4.metric("Fiscal years", "2024 to 2025")
+
+st.caption(
+    "Coverage: "
+    + "  ·  ".join(
+        f"{name} ({stats['per_company'].get(t, 0)} filings)"
+        for t, name in COMPANIES.items()
+    )
+)
+
+st.divider()
+
+tab_ask, tab_variance, tab_data = st.tabs(
+    ["Ask the filings", "Variance analysis", "Financial data"]
+)
+
+
+# ------------------------------------------------------------------- ask tab
 
 with tab_ask:
-    ticker = st.text_input("Ticker filter (optional)", placeholder="ULTA")
-    query = st.text_input(
-        "Question",
-        placeholder="What drove the change in gross margin year over year?",
+    st.subheader("Ask a question")
+    st.write(
+        "Every answer is grounded in retrieved filing passages and cites its "
+        "sources. The system declines when the filings do not contain the answer."
     )
+
+    col_q, col_f = st.columns([3, 1])
+    with col_q:
+        query = st.text_input(
+            "Your question",
+            placeholder="What drove the change in operating margin?",
+        )
+    with col_f:
+        company_label = st.selectbox(
+            "Company",
+            ["All three"] + list(COMPANIES.values()),
+        )
+
+    st.caption("Try one of these:")
+    cols = st.columns(2)
+    for i, q in enumerate(SAMPLE_QUESTIONS):
+        if cols[i % 2].button(q, key=f"sample_{i}", use_container_width=True):
+            query = q
+
     k = st.slider("Passages to retrieve", 3, 10, 5)
 
     if st.button("Ask", type="primary") and query:
-        with st.spinner("Retrieving..."):
+        ticker = None
+        for t, name in COMPANIES.items():
+            if name == company_label:
+                ticker = t
+
+        with st.spinner("Retrieving filings and generating a grounded answer..."):
             try:
                 from src.retrieve import answer
-                result = answer(query, ticker=ticker.upper() or None, k=k)
+                result = answer(query, ticker=ticker, k=k)
             except Exception as e:
                 st.error(f"Index not built yet, or API key missing. ({e})")
                 st.stop()
 
+        st.markdown("#### Answer")
         st.markdown(result["answer"])
 
-        with st.expander(f"Retrieved passages ({len(result['passages'])})"):
-            for i, p in enumerate(result["passages"], start=1):
-                m = p["metadata"]
-                st.markdown(
-                    f"**[{i}]** {m['ticker']} {m['form']} filed {m['filing_date']} "
-                    f"| section: {m['section']} | distance: {p['distance']:.3f}"
-                )
-                st.text(p["text"][:1200] + "...")
-                st.divider()
+        passages = result["passages"]
+        st.markdown(f"#### Sources ({len(passages)})")
 
+        source_rows = [
+            {
+                "Ref": f"[{i}]",
+                "Company": COMPANIES.get(p["metadata"]["ticker"], p["metadata"]["ticker"]),
+                "Form": p["metadata"]["form"],
+                "Filed": p["metadata"]["filing_date"],
+                "Section": p["metadata"]["section"],
+                "Match": f"{1 - p['distance']:.0%}",
+            }
+            for i, p in enumerate(passages, start=1)
+        ]
+        st.dataframe(pd.DataFrame(source_rows), hide_index=True, use_container_width=True)
+
+        for i, p in enumerate(passages, start=1):
+            m = p["metadata"]
+            with st.expander(
+                f"[{i}]  {COMPANIES.get(m['ticker'], m['ticker'])}  ·  "
+                f"{m['form']} filed {m['filing_date']}  ·  {m['section']}"
+            ):
+                st.text(p["text"][:1500] + "...")
+
+
+# -------------------------------------------------------------- variance tab
 
 with tab_variance:
-    st.subheader("Gross margin decomposition")
-    st.caption("Splits the gross profit change into a volume effect and a rate effect.")
+    st.subheader("Year over year variance")
+    st.write(
+        "Computed directly from SEC XBRL data. These figures are deterministic "
+        "arithmetic, not model output, and reconcile to the filings."
+    )
 
-    left, right = st.columns(2)
-    with left:
-        st.markdown("**Prior period**")
-        pr = st.number_input("Revenue", value=1000.0, key="pr")
-        pc = st.number_input("COGS", value=600.0, key="pc")
-    with right:
-        st.markdown("**Current period**")
-        cr = st.number_input("Revenue", value=1200.0, key="cr")
-        cc = st.number_input("COGS", value=680.0, key="cc")
-
-    if st.button("Decompose", type="primary"):
-        try:
-            r = decompose_gross_margin(pr, pc, cr, cc)
-        except ValueError as e:
-            st.error(str(e))
-            st.stop()
-
-        a, b, c = st.columns(3)
-        a.metric("Total change", f"{r['total_change']:,.0f}")
-        b.metric("Volume effect", f"{r['volume_effect']:,.0f}")
-        c.metric("Rate effect", f"{r['rate_effect']:,.0f}")
-
-        st.write(
-            f"Margin moved from {r['prior_margin_pct']:.2f}% "
-            f"to {r['current_margin_pct']:.2f}%."
+    if fin.empty:
+        st.info("Run the financial data step first. See SETUP.md.")
+    else:
+        company = st.selectbox(
+            "Company",
+            list(COMPANIES.values()),
+            key="var_company",
         )
+        ticker = [t for t, n in COMPANIES.items() if n == company][0]
 
-        if abs(r["residual"]) > 0.01:
-            st.warning(f"Decomposition does not reconcile. Residual {r['residual']:,.2f}")
+        sub = fin[fin["ticker"] == ticker]
+        years = sorted(sub["fiscal_year"].unique())
+
+        if len(years) < 2:
+            st.info("Not enough fiscal years available for this company.")
         else:
-            st.success("Effects reconcile to the total change.")
+            cy = st.selectbox("Current fiscal year", years[::-1], key="cy")
+            prior_options = [y for y in years if y < cy]
+            py = st.selectbox("Prior fiscal year", prior_options[::-1], key="py")
+
+            prior = dict(zip(sub[sub["fiscal_year"] == py]["metric"],
+                             sub[sub["fiscal_year"] == py]["value"]))
+            current = dict(zip(sub[sub["fiscal_year"] == cy]["metric"],
+                               sub[sub["fiscal_year"] == cy]["value"]))
+
+            variances = build_variance_table(prior, current)
+
+            if not variances:
+                st.info("No shared metrics between those years.")
+            else:
+                rows = []
+                for v in variances:
+                    pct = f"{v.percent:+.1f}%" if v.percent is not None else "n/a"
+                    rows.append({
+                        "Metric": v.metric.replace("_", " ").title(),
+                        f"FY{py}": f"${v.prior/1e9:,.2f}B",
+                        f"FY{cy}": f"${v.current/1e9:,.2f}B",
+                        "Change": f"${v.absolute/1e9:+,.2f}B",
+                        "%": pct,
+                    })
+
+                st.markdown(f"#### {company}: FY{py} to FY{cy}")
+                st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+
+                material = flag_material(variances, threshold_pct=10.0)
+                if material:
+                    st.markdown("#### Material moves (over 10%)")
+                    for v in material:
+                        st.markdown(
+                            f"- **{v.metric.replace('_', ' ').title()}** "
+                            f"moved {v.percent:+.1f}%"
+                        )
+
+
+# ------------------------------------------------------------------ data tab
+
+with tab_data:
+    st.subheader("Underlying financial data")
+    st.write(
+        "Pulled from SEC XBRL. Every figure carries the exact US-GAAP tag it "
+        "was sourced from, which is the audit trail behind the analysis."
+    )
+
+    if fin.empty:
+        st.info("Run the financial data step first. See SETUP.md.")
+    else:
+        pick = st.multiselect(
+            "Companies",
+            list(COMPANIES.values()),
+            default=list(COMPANIES.values()),
+        )
+        tickers = [t for t, n in COMPANIES.items() if n in pick]
+        view = fin[fin["ticker"].isin(tickers)].copy()
+        view["company"] = view["ticker"].map(COMPANIES)
+        view["value ($B)"] = (view["value"] / 1e9).round(2)
+        view = view[["company", "metric", "fiscal_year", "value ($B)", "tag_used"]]
+        view = view.sort_values(["company", "metric", "fiscal_year"])
+        st.dataframe(view, hide_index=True, use_container_width=True)
