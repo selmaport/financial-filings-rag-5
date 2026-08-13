@@ -6,7 +6,7 @@ A retrieval system over public SEC filings that pairs **computed financial varia
 
 Ask "what drove the change in operating margin" and get the number, the driver breakdown, and the exact filing language behind it.
 
-**Live demo:** _(add Streamlit URL after first deploy)_
+**Live demo:** _([](https://selma-payments-filings.streamlit.app))_
 
 ---
 
