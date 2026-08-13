@@ -32,7 +32,7 @@ load_dotenv()
 CHROMA_DIR = "data/chroma"
 COLLECTION = "filings"
 DEFAULT_K = 8
-MODEL = "gemini-flash-latest"
+MODEL = "gemini-3.6-flash"
 
 SYSTEM_PROMPT = """You answer questions about SEC filings using only the provided excerpts.
 
