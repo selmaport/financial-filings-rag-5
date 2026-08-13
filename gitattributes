@@ -1,0 +1,10 @@
+# Treat downloaded SEC filings as data, not source code, so GitHub's
+# language stats reflect the actual code (Python) instead of the raw
+# HTML filings that dominate by byte count.
+data/raw/** linguist-vendored
+data/raw/** linguist-generated
+*.html linguist-detectable=false
+
+# Keep notebooks and data out of the language bar too, if present.
+*.ipynb linguist-vendored
+data/** linguist-generated
