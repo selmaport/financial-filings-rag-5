@@ -1,2 +1,5 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+data/raw/** linguist-vendored
+data/raw/** linguist-generated
+*.html linguist-detectable=false
+*.ipynb linguist-vendored
+data/** linguist-generated
